@@ -21,7 +21,6 @@ import {
   CalendarCheck,
   Timer,
   SlidersHorizontal,
-  Sparkles,
 } from "lucide-react";
 
 type Priority = "High" | "Medium" | "Low";
@@ -81,7 +80,7 @@ const filters = [
   "Overdue",
 ];
 
-function getLocalDate(date = new Date()) {
+function getLocalDate(date: Date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
@@ -129,7 +128,7 @@ function getTaskDuration(duration: string) {
 }
 
 export default function StudyPlanner() {
-  const today = getLocalDate();
+  const [today, setToday] = useState("");
 
   const [tasks, setTasks] = useState<Task[]>(sampleTasks);
   const [loaded, setLoaded] = useState(false);
@@ -149,9 +148,13 @@ export default function StudyPlanner() {
   const [priority, setPriority] = useState<Priority>("Medium");
   const [description, setDescription] = useState("");
 
-  // LOAD SAVED TASKS
+  // LOAD SAVED TASKS AND GET TODAY'S DATE
 
   useEffect(() => {
+    const currentDate = getLocalDate(new Date());
+
+    setToday(currentDate);
+
     const saved = localStorage.getItem(STORAGE_KEY);
 
     if (saved) {
@@ -163,7 +166,7 @@ export default function StudyPlanner() {
             id: Number(task.id) || Date.now() + index,
             title: String(task.title || "Untitled task"),
             subject: String(task.subject || "Other"),
-            date: String(task.date || today),
+            date: String(task.date || currentDate),
             duration: String(task.duration || "30 minutes"),
             completed: Boolean(task.completed),
             priority:
@@ -212,37 +215,39 @@ export default function StudyPlanner() {
     : 0;
 
   const todayTasks = tasks
-    .filter((task) => task.date === today)
-    .sort((a, b) =>
-      getPriorityWeight(b.priority) - getPriorityWeight(a.priority)
+    .filter((task) => today && task.date === today)
+    .sort(
+      (a, b) =>
+        getPriorityWeight(b.priority) - getPriorityWeight(a.priority)
     );
 
   const totalStudyMinutes = tasks.reduce(
-    (total, task) =>
-      total + getTaskDuration(task.duration),
+    (total, task) => total + getTaskDuration(task.duration),
     0
   );
 
   // WEEKLY OVERVIEW
 
-  const weekDays = Array.from({ length: 7 }, (_, index) => {
-    const dateValue = getDateOffset(today, index);
+  const weekDays = today
+    ? Array.from({ length: 7 }, (_, index) => {
+        const dateValue = getDateOffset(today, index);
 
-    const dayTasks = tasks.filter(
-      (task) => task.date === dateValue
-    );
+        const dayTasks = tasks.filter(
+          (task) => task.date === dateValue
+        );
 
-    return {
-      date: dateValue,
-      day: new Date(`${dateValue}T00:00:00`).toLocaleDateString(
-        "en-IN",
-        { weekday: "short" }
-      ),
-      number: new Date(`${dateValue}T00:00:00`).getDate(),
-      count: dayTasks.length,
-      completed: dayTasks.filter((task) => task.completed).length,
-    };
-  });
+        return {
+          date: dateValue,
+          day: new Date(`${dateValue}T00:00:00`).toLocaleDateString(
+            "en-IN",
+            { weekday: "short" }
+          ),
+          number: new Date(`${dateValue}T00:00:00`).getDate(),
+          count: dayTasks.length,
+          completed: dayTasks.filter((task) => task.completed).length,
+        };
+      })
+    : [];
 
   // FILTER AND SORT TASKS
 
@@ -255,15 +260,15 @@ export default function StudyPlanner() {
 
       const matchesFilter =
         filter === "Today"
-          ? task.date === today
+          ? today !== "" && task.date === today
           : filter === "Upcoming"
-          ? !task.completed && task.date > today
+          ? !task.completed && today !== "" && task.date > today
           : filter === "Pending"
-          ? !task.completed && task.date >= today
+          ? !task.completed && today !== "" && task.date >= today
           : filter === "Completed"
           ? task.completed
           : filter === "Overdue"
-          ? !task.completed && task.date < today
+          ? !task.completed && today !== "" && task.date < today
           : true;
 
       const matchesDate = selectedDate
@@ -275,8 +280,10 @@ export default function StudyPlanner() {
 
     return result.sort((a, b) => {
       if (sortBy === "Priority") {
-        return getPriorityWeight(b.priority) -
-          getPriorityWeight(a.priority);
+        return (
+          getPriorityWeight(b.priority) -
+          getPriorityWeight(a.priority)
+        );
       }
 
       if (sortBy === "Latest date") {
@@ -300,6 +307,8 @@ export default function StudyPlanner() {
   }
 
   function openAddForm() {
+    if (!today) return;
+
     resetForm();
     setDate(today);
     setShowForm(true);
@@ -388,6 +397,7 @@ export default function StudyPlanner() {
 
   function getTaskStatus(task: Task) {
     if (task.completed) return "Completed";
+    if (!today) return "Upcoming";
     if (task.date < today) return "Overdue";
     if (task.date === today) return "Today";
     return "Upcoming";
@@ -555,9 +565,7 @@ export default function StudyPlanner() {
                 <button
                   key={day.date}
                   onClick={() =>
-                    setSelectedDate(
-                      active ? "" : day.date
-                    )
+                    setSelectedDate(active ? "" : day.date)
                   }
                   className={`rounded-xl border p-3 text-center transition ${
                     active
@@ -569,9 +577,11 @@ export default function StudyPlanner() {
                     {isToday ? "Today" : day.day}
                   </p>
 
-                  <p className={`text-xl font-bold my-2 ${
-                    active ? "text-purple-300" : "text-white"
-                  }`}>
+                  <p
+                    className={`text-xl font-bold my-2 ${
+                      active ? "text-purple-300" : "text-white"
+                    }`}
+                  >
                     {day.number}
                   </p>
 
@@ -642,15 +652,16 @@ export default function StudyPlanner() {
                     {task.completed ? (
                       <CheckCircle2 className="text-green-400" size={21} />
                     ) : (
-                      <Circle className="text-gray-400 hover:text-purple-400" size={21} />
+                      <Circle
+                        className="text-gray-400 hover:text-purple-400"
+                        size={21}
+                      />
                     )}
                   </button>
 
                   <span
                     className={`text-sm flex-1 ${
-                      task.completed
-                        ? "line-through text-gray-500"
-                        : ""
+                      task.completed ? "line-through text-gray-500" : ""
                     }`}
                   >
                     {task.title}
@@ -771,7 +782,10 @@ export default function StudyPlanner() {
                         {task.completed ? (
                           <CheckCircle2 className="text-green-400" size={23} />
                         ) : (
-                          <Circle className="text-gray-500 hover:text-purple-400" size={23} />
+                          <Circle
+                            className="text-gray-500 hover:text-purple-400"
+                            size={23}
+                          />
                         )}
                       </button>
 
@@ -813,7 +827,11 @@ export default function StudyPlanner() {
 
                     <div className="flex flex-wrap items-center justify-between sm:justify-end gap-3 sm:gap-4 sm:ml-4">
 
-                      <span className={`text-xs px-3 py-1.5 rounded-lg border ${getPriorityColor(task.priority)}`}>
+                      <span
+                        className={`text-xs px-3 py-1.5 rounded-lg border ${getPriorityColor(
+                          task.priority
+                        )}`}
+                      >
                         <span className="inline-flex items-center gap-1">
                           <Flag size={12} />
                           {task.priority}
@@ -890,7 +908,9 @@ export default function StudyPlanner() {
 
               <p className="text-xs text-gray-500 flex items-center gap-2">
                 <Timer size={14} className="text-purple-400" />
-                Total planned study time: {Math.floor(totalStudyMinutes / 60)}h {totalStudyMinutes % 60}m
+                Total planned study time:{" "}
+                {Math.floor(totalStudyMinutes / 60)}h{" "}
+                {totalStudyMinutes % 60}m
               </p>
             </div>
           )}
@@ -991,7 +1011,7 @@ export default function StudyPlanner() {
             <input
               required
               type="date"
-              min={editingId === null ? today : undefined}
+              min={today || undefined}
               value={date}
               onChange={(e) => setDate(e.target.value)}
               className="w-full rounded-xl bg-[#202033] border border-white/10 p-3 mb-5 text-sm outline-none"

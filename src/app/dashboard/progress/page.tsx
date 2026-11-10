@@ -38,6 +38,12 @@ type Subject = {
   completedTopics?: string[];
 };
 
+type WeeklyItem = {
+  day: string;
+  minutes: number;
+  hours: number;
+};
+
 function getMinutes(duration: string) {
   return parseInt(duration, 10) || 0;
 }
@@ -76,7 +82,9 @@ export default function ProgressPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [weeklyData, setWeeklyData] = useState<WeeklyItem[]>([]);
 
+  // Load saved data
   useEffect(() => {
     try {
       const savedTasks = localStorage.getItem("studysphere-tasks");
@@ -135,6 +143,40 @@ export default function ProgressPage() {
     setLoaded(true);
   }, []);
 
+  // Calculate weekly activity after the page loads
+  useEffect(() => {
+    const today = new Date();
+
+    const activity = Array.from({ length: 7 }, (_, index) => {
+      const date = new Date(
+        today.getFullYear(),
+        today.getMonth(),
+        today.getDate() - (6 - index)
+      );
+
+      const dateKey = getDateKey(date);
+
+      const minutes = tasks
+        .filter(
+          (task) => task.completed && task.date === dateKey
+        )
+        .reduce(
+          (total, task) => total + getMinutes(task.duration),
+          0
+        );
+
+      return {
+        day: date.toLocaleDateString("en-US", {
+          weekday: "short",
+        }),
+        minutes,
+        hours: minutes / 60,
+      };
+    });
+
+    setWeeklyData(activity);
+  }, [tasks]);
+
   // Task statistics
   const completedTasks = tasks.filter(
     (task) => task.completed
@@ -170,36 +212,6 @@ export default function ProgressPage() {
   const overallSubjectProgress = totalTopics
     ? Math.round((completedTopics / totalTopics) * 100)
     : 0;
-
-  // Weekly study activity
-  const today = new Date();
-
-  const weeklyData = Array.from({ length: 7 }, (_, index) => {
-    const date = new Date(
-      today.getFullYear(),
-      today.getMonth(),
-      today.getDate() - (6 - index)
-    );
-
-    const dateKey = getDateKey(date);
-
-    const minutes = tasks
-      .filter(
-        (task) => task.completed && task.date === dateKey
-      )
-      .reduce(
-        (total, task) => total + getMinutes(task.duration),
-        0
-      );
-
-    return {
-      day: date.toLocaleDateString("en-US", {
-        weekday: "short",
-      }),
-      minutes,
-      hours: minutes / 60,
-    };
-  });
 
   const maxHours = Math.max(
     ...weeklyData.map((item) => item.hours),
